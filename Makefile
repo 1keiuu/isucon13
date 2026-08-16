@@ -6,11 +6,11 @@ NGINX_ACCESS_LOG_PATH:=/var/log/nginx/access.log
 ## [App] Restart server
 app/restart:
 	systemctl daemon-reload
-	systemctl restart isucondition.go.service
+	systemctl restart isupipe-go.service
 
 ## [App] Build
 app/build:
-	cd webapp/go && GOOS=linux GOARCH=amd64 go build -o isucondition
+	cd webapp/go && GOOS=linux GOARCH=amd64 go build -o isupipe
 
 ## [MySQL] Restart server
 mysql/restart:
