@@ -45,66 +45,48 @@ jobs:
           rsync -av isucondb:~/pt_query_digest_analysis.txt ./
           rsync -av isucondb:~/mysqldumpslow_analysis.txt ./
           rsync -av isuconapp:~/alp_analysis.txt ./
-      - name: Create pt-query-digest comment on PR
+      - name: Create analysis comments on PR
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const content = fs.readFileSync('pt_query_digest_analysis.txt', 'utf8');
-            const body = `Analyze slow query log by pt-query-digest.
-            <details>
-            <summary>Show Output</summary>
 
-            \`\`\`
-            ${content}
-            \`\`\`
+            const MAX_BODY_LENGTH = 60000;
 
-            </details>`;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.issue.number,
-              body,
-            });
-      - name: Create mysqldumpslow comment on PR
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const content = fs.readFileSync('mysqldumpslow_analysis.txt', 'utf8');
-            const body = `Analyze slow query log by mysqldumpslow.
-            <details>
-            <summary>Show Output</summary>
+            function buildCommentBody(title, content) {
+              const prefix = `${title}\n<details>\n<summary>Show Output</summary>\n\n\`\`\`\n`;
+              const suffix = '\n```\n\n</details>';
+              const maxContentLength = MAX_BODY_LENGTH - prefix.length - suffix.length - 100;
+              if (content.length <= maxContentLength) {
+                return prefix + content + suffix;
+              }
+              const truncated = content.slice(0, maxContentLength);
+              const note = `\n\n...(truncated: showing first ${maxContentLength} of ${content.length} characters)`;
+              return prefix + truncated + note + suffix;
+            }
 
-            \`\`\`
-            ${content}
-            \`\`\`
+            const reports = [
+              {
+                title: 'Analyze slow query log by pt-query-digest.',
+                filepath: 'pt_query_digest_analysis.txt',
+              },
+              {
+                title: 'Analyze slow query log by mysqldumpslow.',
+                filepath: 'mysqldumpslow_analysis.txt',
+              },
+              {
+                title: 'Analyze access log by alp.',
+                filepath: 'alp_analysis.txt',
+              },
+            ];
 
-            </details>`;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.issue.number,
-              body,
-            });
-      - name: Create alp comment on PR
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const content = fs.readFileSync('alp_analysis.txt', 'utf8');
-            const body = `Analyze access log by alp.
-            <details>
-            <summary>Show Output</summary>
-
-            \`\`\`
-            ${content}
-            \`\`\`
-
-            </details>`;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.issue.number,
-              body,
-            });
+            for (const report of reports) {
+              const content = fs.readFileSync(report.filepath, 'utf8');
+              const body = buildCommentBody(report.title, content);
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                body,
+              });
+            }
