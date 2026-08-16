@@ -148,13 +148,15 @@ func main() {
 	startProfiler()
 
 	e := echo.New()
-	e.Debug = true
-	e.Logger.SetLevel(echolog.DEBUG)
-	e.Use(middleware.Logger())
+	// リクエストごとのログ出力は 1 リクエストあたり数百μs〜の write を発生させるため止める。
+	// OFF ではなく ERROR にして、失敗時の原因追跡だけは残す。
+	e.Debug = false
+	e.Logger.SetLevel(echolog.ERROR)
 	cookieStore := sessions.NewCookieStore(secret)
 	cookieStore.Options.Domain = "*.u.isucon.local"
 	e.Use(session.Middleware(cookieStore))
-	// e.Use(middleware.Recover())
+	// middleware.Logger() を外した代わりに、panic でプロセスが落ちないよう Recover を有効化する
+	e.Use(middleware.Recover())
 
 	// 初期化
 	e.POST("/api/initialize", initializeHandler)
