@@ -41,59 +41,65 @@ jobs:
           rsync -av isucondb:~/mysqldumpslow_analysis.txt ./
           rsync -av isuconapp:~/alp_analysis.txt ./
       - name: Create pt-query-digest comment on PR
-        uses: shellingford330/pr-comment-action@v0.0.6
+        uses: actions/github-script@v7
         with:
-          owner: ${{ github.event.repository.owner.login }}
-          repo: ${{ github.event.repository.name }}
-          pr_number: ${{ github.event.issue.number }}
-          filepath: pt_query_digest_analysis.txt
-          template: |
-            Analyze slow query log by pt-query-digest.
+          script: |
+            const fs = require('fs');
+            const content = fs.readFileSync('pt_query_digest_analysis.txt', 'utf8');
+            const body = `Analyze slow query log by pt-query-digest.
             <details>
             <summary>Show Output</summary>
 
-            ```
-            {{ . }}
-            ```
+            \`\`\`
+            ${content}
+            \`\`\`
 
-            </details>
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            </details>`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body,
+            });
       - name: Create mysqldumpslow comment on PR
-        uses: shellingford330/pr-comment-action@v0.0.6
+        uses: actions/github-script@v7
         with:
-          owner: ${{ github.event.repository.owner.login }}
-          repo: ${{ github.event.repository.name }}
-          pr_number: ${{ github.event.issue.number }}
-          filepath: mysqldumpslow_analysis.txt
-          template: |
-            Analyze slow query log by mysqldumpslow.
+          script: |
+            const fs = require('fs');
+            const content = fs.readFileSync('mysqldumpslow_analysis.txt', 'utf8');
+            const body = `Analyze slow query log by mysqldumpslow.
             <details>
             <summary>Show Output</summary>
 
-            ```
-            {{ . }}
-            ```
+            \`\`\`
+            ${content}
+            \`\`\`
 
-            </details>
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            </details>`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body,
+            });
       - name: Create alp comment on PR
-        uses: shellingford330/pr-comment-action@v0.0.6
+        uses: actions/github-script@v7
         with:
-          owner: ${{ github.event.repository.owner.login }}
-          repo: ${{ github.event.repository.name }}
-          pr_number: ${{ github.event.issue.number }}
-          filepath: alp_analysis.txt
-          template: |
-            Analyze access log by alp.
+          script: |
+            const fs = require('fs');
+            const content = fs.readFileSync('alp_analysis.txt', 'utf8');
+            const body = `Analyze access log by alp.
             <details>
             <summary>Show Output</summary>
 
-            ```
-            {{ . }}
-            ```
+            \`\`\`
+            ${content}
+            \`\`\`
 
-            </details>
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            </details>`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body,
+            });
