@@ -1,0 +1,13 @@
+[Unit]
+Description=pprotein-agent (httplog on app host)
+After=nginx.service
+
+[Service]
+Environment=PORT=19001
+Environment=PPROTEIN_HTTPLOG=/var/log/nginx/access.log
+ExecStart=/usr/local/bin/pprotein-agent
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

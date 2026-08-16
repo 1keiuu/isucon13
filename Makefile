@@ -2,6 +2,9 @@ SHELL:=/bin/bash -e -o pipefail
 
 MYSQL_SLOW_LOG_PATH:=/var/log/mysql/mysql-slow.log
 NGINX_ACCESS_LOG_PATH:=/var/log/nginx/access.log
+PPROTEIN_VERSION:=1.2.4
+ALP_VERSION:=1.0.21
+SLP_VERSION:=0.2.1
 
 ## [App] Restart server
 app/restart:
@@ -56,7 +59,34 @@ nginx/install-alp:
 
 ## [Nginx] Run alp
 nginx/alp:
-	# パスパラメータの正規表現の例： -m "/posts/[0-9]+,/image/.*"
-	# 並び替え： --sort=sum --sort=avg
-	alp json --sort=avg --file ${NGINX_ACCESS_LOG_PATH} -m "/api/livestream/[0-9]+,/api/livestream/[0-9]+/livecomment,/api/livestream/[0-9]+/reaction,/api/user/[^/]+" -r -o count,method,uri,min,avg,max,sum > alp_analysis.txt
+	alp ltsv --sort=avg --file ${NGINX_ACCESS_LOG_PATH} -m "/api/livestream/[0-9]+,/api/livestream/[0-9]+/livecomment,/api/livestream/[0-9]+/reaction,/api/user/[^/]+" -r -o count,method,uri,min,avg,max,sum > alp_analysis.txt
+
+## [pprotein] First-time setup (app host)
+pprotein/setup-app: pprotein/install-app
+	mkdir -p /opt/pprotein
+	systemctl daemon-reload
+	systemctl enable --now pprotein.service pprotein-agent-httplog.service
+
+pprotein/install-app:
+	wget -q https://github.com/kaz/pprotein/releases/download/v$(PPROTEIN_VERSION)/pprotein_$(PPROTEIN_VERSION)_linux_amd64.tar.gz
+	tar -xzf pprotein_$(PPROTEIN_VERSION)_linux_amd64.tar.gz
+	install ./pprotein ./pprotein-agent /usr/local/bin/
+	apt-get update
+	apt-get install -y graphviz unzip
+	wget -q https://github.com/tkuchiki/alp/releases/download/v$(ALP_VERSION)/alp_linux_amd64.zip
+	unzip -o alp_linux_amd64.zip
+	install ./alp /usr/local/bin/
+	wget -q https://github.com/tkuchiki/slp/releases/download/v$(SLP_VERSION)/slp_linux_amd64.tar.gz
+	tar -xzf slp_linux_amd64.tar.gz
+	install ./slp /usr/local/bin/
+
+## [pprotein] First-time setup (DB host)
+pprotein/setup-db: pprotein/install-agent
+	systemctl daemon-reload
+	systemctl enable --now pprotein-agent.service
+
+pprotein/install-agent:
+	wget -q https://github.com/kaz/pprotein/releases/download/v$(PPROTEIN_VERSION)/pprotein_$(PPROTEIN_VERSION)_linux_amd64.tar.gz
+	tar -xzf pprotein_$(PPROTEIN_VERSION)_linux_amd64.tar.gz
+	install ./pprotein-agent /usr/local/bin/
 

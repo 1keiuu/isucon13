@@ -1,0 +1,14 @@
+[Unit]
+Description=pprotein-agent (slowlog server)
+After=mysql.service
+Requires=mysql.service
+
+[Service]
+Environment=PORT=19000
+Environment=PPROTEIN_SLOWLOG=/var/log/mysql/mysql-slow.log
+ExecStart=/usr/local/bin/pprotein-agent
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

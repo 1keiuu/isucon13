@@ -1,0 +1,11 @@
+[Unit]
+Description=pprotein
+
+[Service]
+WorkingDirectory=/opt/pprotein
+ExecStart=/usr/local/bin/pprotein
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

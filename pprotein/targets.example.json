@@ -1,0 +1,20 @@
+[
+  {
+    "Type": "pprof",
+    "Label": "app-fg",
+    "URL": "http://127.0.0.1:19000/debug/fgprof",
+    "Duration": 60
+  },
+  {
+    "Type": "httplog",
+    "Label": "app",
+    "URL": "http://127.0.0.1:19001/debug/log/httplog",
+    "Duration": 60
+  },
+  {
+    "Type": "slowlog",
+    "Label": "db",
+    "URL": "http://<DB_PRIVATE_IP>:19000/debug/log/slowlog",
+    "Duration": 60
+  }
+]

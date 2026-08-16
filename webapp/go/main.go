@@ -11,9 +11,11 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	"github.com/kaz/pprotein/integration/standalone"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
@@ -25,6 +27,7 @@ import (
 const (
 	listenPort                     = 8080
 	powerDNSSubdomainAddressEnvKey = "ISUCON13_POWERDNS_SUBDOMAIN_ADDRESS"
+	pproteinProfilerPort           = "127.0.0.1:19000"
 )
 
 var (
@@ -42,6 +45,27 @@ func init() {
 
 type InitializeResponse struct {
 	Language string `json:"language"`
+}
+
+func startProfiler() {
+	if os.Getenv("ENABLE_PPROTEIN") != "1" {
+		return
+	}
+	go standalone.Integrate(pproteinProfilerPort)
+}
+
+func triggerPproteinCollect() {
+	if os.Getenv("ENABLE_PPROTEIN") != "1" {
+		return
+	}
+	endpoint := os.Getenv("PPROTEIN_ENDPOINT")
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:9000"
+	}
+	go func() {
+		time.Sleep(2 * time.Second)
+		_, _ = http.Get(endpoint + "/api/group/collect")
+	}()
 }
 
 func connectDB(logger echo.Logger) (*sqlx.DB, error) {
@@ -112,6 +136,8 @@ func initializeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
 	}
 
+	triggerPproteinCollect()
+
 	c.Request().Header.Add("Content-Type", "application/json;charset=utf-8")
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "golang",
@@ -119,6 +145,8 @@ func initializeHandler(c echo.Context) error {
 }
 
 func main() {
+	startProfiler()
+
 	e := echo.New()
 	e.Debug = true
 	e.Logger.SetLevel(echolog.DEBUG)
