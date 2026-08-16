@@ -58,5 +58,5 @@ nginx/install-alp:
 nginx/alp:
 	# パスパラメータの正規表現の例： -m "/posts/[0-9]+,/image/.*"
 	# 並び替え： --sort=sum --sort=avg
-	alp json --sort=avg --file ${NGINX_ACCESS_LOG_PATH} -m "/api/isu/[a-z0-9-]+/graph,/api/condition/[a-z0-9-]+" -r > alp_analysis.txt
+	alp json --sort=avg --file ${NGINX_ACCESS_LOG_PATH} -m "/api/livestream/[0-9]+,/api/livestream/[0-9]+/livecomment,/api/livestream/[0-9]+/reaction,/api/user/[^/]+" -r -o count,method,uri,min,avg,max,sum > alp_analysis.txt
 
