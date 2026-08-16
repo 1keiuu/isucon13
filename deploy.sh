@@ -2,7 +2,7 @@
 
 set -ue
 
-# Deploy source to remote 
+# Deploy source to remote
 rsync -av ./webapp/ isuconapp:/home/isucon/webapp/
 rsync -av ./nginx/ isuconapp:/etc/nginx/
 rsync -av ./mysql/ isucondb:/etc/mysql/

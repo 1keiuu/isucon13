@@ -81,3 +81,10 @@ Pull Request か Issue で下記のコメントをすると、アクセスログ
 ```
 /analyze
 ```
+
+## Agent Tasks
+
+```
+/summarize-issues # リポジトリ内のIssueをまとめる
+/parallel-plan # 作成したIssueの並行作業プランを可視化する
+```
