@@ -121,7 +121,17 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(10)
+	// c5.large (2 vCPU) が上限なので、増やしすぎるとコンテキストスイッチや
+	// ロック競合で悪化する。MySQL側のmax_connections(#7で512に変更予定)を
+	// 超えないことを前提に64から試す(#18)。
+	db.SetMaxOpenConns(64)
+	// MaxOpenConnsと同じ値にする(定石)。ここを揃えないと、増やした分の接続が
+	// 使い終わるたびに毎回破棄・再作成(TCP+MySQL認証)される「作り直す接続」に
+	// なってしまい逆効果になる。
+	db.SetMaxIdleConns(64)
+	// 無期限(デフォルト)だが意図を明示しておく。
+	db.SetConnMaxLifetime(0)
+	db.SetConnMaxIdleTime(0)
 
 	if err := db.Ping(); err != nil {
 		return nil, err
@@ -148,13 +158,15 @@ func main() {
 	startProfiler()
 
 	e := echo.New()
-	e.Debug = true
-	e.Logger.SetLevel(echolog.DEBUG)
-	e.Use(middleware.Logger())
+	// リクエストごとのログ出力は 1 リクエストあたり数百μs〜の write を発生させるため止める。
+	// OFF ではなく ERROR にして、失敗時の原因追跡だけは残す。
+	e.Debug = false
+	e.Logger.SetLevel(echolog.ERROR)
 	cookieStore := sessions.NewCookieStore(secret)
 	cookieStore.Options.Domain = "*.u.isucon.local"
 	e.Use(session.Middleware(cookieStore))
-	// e.Use(middleware.Recover())
+	// middleware.Logger() を外した代わりに、panic でプロセスが落ちないよう Recover を有効化する
+	e.Use(middleware.Recover())
 
 	// 初期化
 	e.POST("/api/initialize", initializeHandler)
