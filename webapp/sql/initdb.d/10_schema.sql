@@ -104,3 +104,36 @@ CREATE TABLE `reactions` (
   `emoji_name` VARCHAR(255) NOT NULL,
   `created_at` BIGINT NOT NULL
 ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+
+-- ---------------------------------------------------------------------------
+-- INDEX
+-- 既に稼働している DB には initdb.d は再実行されないため、
+-- 同じ内容を webapp/sql/add_index.sql から手で流す必要がある。
+-- ---------------------------------------------------------------------------
+
+-- WHERE livestream_id = ? ORDER BY created_at DESC を1本でカバーする
+CREATE INDEX idx_livecomments_livestream_created ON livecomments (`livestream_id`, `created_at` DESC);
+CREATE INDEX idx_livecomments_user ON livecomments (`user_id`);
+
+CREATE INDEX idx_reactions_livestream_created ON reactions (`livestream_id`, `created_at` DESC);
+CREATE INDEX idx_reactions_user ON reactions (`user_id`);
+
+CREATE INDEX idx_livestreams_user ON livestreams (`user_id`);
+
+-- 1ユーザ1行なので UNIQUE
+CREATE UNIQUE INDEX uniq_icons_user ON icons (`user_id`);
+CREATE UNIQUE INDEX uniq_themes_user ON themes (`user_id`);
+
+CREATE INDEX idx_livestream_tags_livestream ON livestream_tags (`livestream_id`);
+CREATE INDEX idx_livestream_tags_tag ON livestream_tags (`tag_id`, `livestream_id`);
+
+CREATE INDEX idx_livecomment_reports_livestream ON livecomment_reports (`livestream_id`);
+
+CREATE INDEX idx_viewers_livestream ON livestream_viewers_history (`livestream_id`);
+CREATE INDEX idx_viewers_user_livestream ON livestream_viewers_history (`user_id`, `livestream_id`);
+
+-- 投げ銭 POST のスパム判定（初期データ 14337 行のフルスキャンを消す）
+CREATE INDEX idx_ng_words_user_livestream ON ng_words (`user_id`, `livestream_id`);
+CREATE INDEX idx_ng_words_livestream ON ng_words (`livestream_id`);
+
+CREATE INDEX idx_reservation_slots_range ON reservation_slots (`start_at`, `end_at`);
