@@ -38,6 +38,16 @@ mysql/pt-query-digest:
 mysql/mysqldumpslow:
 	mysqldumpslow ${MYSQL_SLOW_LOG_PATH} > mysqldumpslow_analysis.txt
 
+## [MySQL] Add missing indexes to the existing DB (run on app host; connects to the DB host). Do not run during a benchmark run.
+mysql/add-index:
+	mysql \
+		-u"$${ISUCON13_MYSQL_DIALCONFIG_USER:-isucon}" \
+		-p"$${ISUCON13_MYSQL_DIALCONFIG_PASSWORD:-isucon}" \
+		--host "$${ISUCON13_MYSQL_DIALCONFIG_ADDRESS:-192.168.139.51}" \
+		--port "$${ISUCON13_MYSQL_DIALCONFIG_PORT:-3306}" \
+		"$${ISUCON13_MYSQL_DIALCONFIG_DATABASE:-isupipe}" \
+		< webapp/sql/add_index.sql
+
 ## [Nginx] Restart server
 nginx/restart:
 	nginx -t
