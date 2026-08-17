@@ -121,7 +121,17 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(10)
+	// c5.large (2 vCPU) が上限なので、増やしすぎるとコンテキストスイッチや
+	// ロック競合で悪化する。MySQL側のmax_connections(#7で512に変更予定)を
+	// 超えないことを前提に64から試す(#18)。
+	db.SetMaxOpenConns(64)
+	// MaxOpenConnsと同じ値にする(定石)。ここを揃えないと、増やした分の接続が
+	// 使い終わるたびに毎回破棄・再作成(TCP+MySQL認証)される「作り直す接続」に
+	// なってしまい逆効果になる。
+	db.SetMaxIdleConns(64)
+	// 無期限(デフォルト)だが意図を明示しておく。
+	db.SetConnMaxLifetime(0)
+	db.SetConnMaxIdleTime(0)
 
 	if err := db.Ping(); err != nil {
 		return nil, err
@@ -148,13 +158,18 @@ func main() {
 	startProfiler()
 
 	e := echo.New()
-	e.Debug = true
-	e.Logger.SetLevel(echolog.DEBUG)
-	e.Use(middleware.Logger())
+	e.Debug = false
+	// OFFにするとエラーすら追えなくなり、ベンチfail時の原因調査ができなくなるため
+	// ERRORだけは残す。
+	e.Logger.SetLevel(echolog.ERROR)
+	// nginx側のltsvアクセスログ($upstream_response_timeでレイテンシも取得できる、#2)
+	// で代替できるため、二重になっていたアプリ側のアクセスログ出力は削除する(#17)。
 	cookieStore := sessions.NewCookieStore(secret)
 	cookieStore.Options.Domain = "*.u.isucon.local"
 	e.Use(session.Middleware(cookieStore))
-	// e.Use(middleware.Recover())
+	// panicでプロセスが落ちて負荷走行が丸ごとfailするリスクを避けるため有効化する。
+	// わずかなオーバーヘッドより保険としての価値が大きい(#17)。
+	e.Use(middleware.Recover())
 
 	// 初期化
 	e.POST("/api/initialize", initializeHandler)

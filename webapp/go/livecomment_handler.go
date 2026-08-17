@@ -215,7 +215,8 @@ func postLivecommentHandler(c echo.Context) error {
 		if err := tx.GetContext(ctx, &hitSpam, query, req.Comment, ngword.Word); err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get hitspam: "+err.Error())
 		}
-		c.Logger().Infof("[hitSpam=%d] comment = %s", hitSpam, req.Comment)
+		// NGワード判定ループのホットパスにあったデバッグログを削除(#17)。
+		// hitSpamの判定ロジック自体はそのまま残す。
 		if hitSpam >= 1 {
 			return echo.NewHTTPError(http.StatusBadRequest, "このコメントがスパム判定されました")
 		}
