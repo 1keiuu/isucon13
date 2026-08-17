@@ -14,7 +14,12 @@ CREATE TABLE `users` (
 CREATE TABLE `icons` (
   `id` BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
   `user_id` BIGINT NOT NULL,
-  `image` LONGBLOB NOT NULL
+  `image` LONGBLOB NOT NULL,
+  -- 画像のSHA256(hex)。書き込み時(postIconHandler)に計算して保存し、
+  -- 読み取り側(fillUserResponse/getIconHandler)がLONGBLOBを読まずに済むようにする(#11)。
+  -- 既に稼働しているDBには initdb.d は再実行されないため、
+  -- webapp/sql/alter_icon_hash.sql を手で流す必要がある。
+  `icon_hash` VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT ''
 ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 -- ユーザごとのカスタムテーマ
