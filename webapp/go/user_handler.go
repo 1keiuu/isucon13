@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -91,34 +92,90 @@ type PostIconResponse struct {
 	ID int64 `json:"id"`
 }
 
+// userIconHashRow は、ユーザーの存在確認とアイコンの有無を1クエリで判定するための
+// 中間結果。icons に行が無い(未登録)ユーザーと、users に行が無い(存在しない)
+// ユーザーを区別できるよう、users を起点に icons を LEFT JOIN する。
+type userIconHashRow struct {
+	UserID   int64          `db:"user_id"`
+	IconHash sql.NullString `db:"icon_hash"`
+}
+
+// ifNoneMatchMatches は、リクエストの If-None-Match ヘッダの値が
+// 与えられた ETag(クォート無しの生の値、ここでは icon_hash の16進文字列)に
+// マッチするかどうかを RFC 9110 §13.1.2 に従って判定する。
+//   - ifNoneMatch が空文字列(ヘッダが無い)の場合は、条件付きリクエストではないので
+//     常に false を返す(呼び出し側は絶対に304を返してはいけない: MUST NOT)。
+//   - カンマ区切りの複数値、"W/" 弱いバリデータの接頭辞、クォート、"*" ワイルドカードに対応する。
+func ifNoneMatchMatches(ifNoneMatch string, etag string) bool {
+	if ifNoneMatch == "" {
+		return false
+	}
+	for _, tag := range strings.Split(ifNoneMatch, ",") {
+		tag = strings.TrimSpace(tag)
+		if tag == "*" {
+			return true
+		}
+		tag = strings.TrimPrefix(tag, "W/")
+		tag = strings.Trim(tag, `"`)
+		if tag == etag {
+			return true
+		}
+	}
+	return false
+}
+
 func getIconHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	username := c.Param("username")
 
-	tx, err := dbConn.BeginTxx(ctx, nil)
+	// トランザクションは不要な読み取り専用クエリなので dbConn を直接使う。
+	// users と icons を1クエリで JOIN し、画像本体(LONGBLOB)は読まない。
+	// LEFT JOIN にすることで、「ユーザーが存在しない」(404)と
+	// 「ユーザーは存在するがアイコン未登録」(フォールバック画像)を区別できる。
+	var row userIconHashRow
+	err := dbConn.GetContext(ctx, &row, `
+		SELECT u.id AS user_id, i.icon_hash AS icon_hash
+		FROM users u
+		LEFT JOIN icons i ON i.user_id = u.id
+		WHERE u.name = ?`, username)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to begin transaction: "+err.Error())
-	}
-	defer tx.Rollback()
-
-	var user UserModel
-	if err := tx.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	}
 
-	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return c.File(fallbackImage)
-		} else {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
-		}
+	hasIcon := row.IconHash.Valid
+	iconHash := fallbackImageHash
+	if hasIcon {
+		iconHash = row.IconHash.String
 	}
 
+	// 条件付きGETのときだけ304を返す。If-None-Matchが無いリクエストに304を
+	// 返すとマニュアルのMUST NOT違反になるため、ヘッダが空の場合は
+	// ifNoneMatchMatchesが必ずfalseを返す実装にしている。
+	if ifNoneMatchMatches(c.Request().Header.Get("If-None-Match"), iconHash) {
+		return c.NoContent(http.StatusNotModified)
+	}
+
+	// 304 でない場合だけ画像本体を読む。
+	if !hasIcon {
+		c.Response().Header().Set("ETag", `"`+iconHash+`"`)
+		return c.File(fallbackImage)
+	}
+
+	var image []byte
+	if err := dbConn.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", row.UserID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// 直前の判定後にアイコンが削除された場合のレース対応。
+			c.Response().Header().Set("ETag", `"`+fallbackImageHash+`"`)
+			return c.File(fallbackImage)
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
+	}
+
+	c.Response().Header().Set("ETag", `"`+iconHash+`"`)
 	return c.Blob(http.StatusOK, "image/jpeg", image)
 }
 
