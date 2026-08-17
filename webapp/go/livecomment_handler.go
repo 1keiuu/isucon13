@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -197,25 +198,25 @@ func postLivecommentHandler(c echo.Context) error {
 	}
 
 	// スパム判定
+	// NGワード自体の取得はDBから都度読む(moderateHandlerでの登録を即時反映する必要があるためキャッシュしない)。
+	// 判定処理(元は `text LIKE CONCAT('%', word, '%')` をNGワードごとにMySQLへ投げていた)はGoの文字列比較に置き換える。
+	//
+	// 等価性の根拠:
+	// 1. 大文字小文字を区別しない: connectDB (main.go) はmysql.NewConfig()にCollation/charsetを設定しておらず、
+	//    go-sql-driver/mysql v1.8.1のデフォルト照合順序 utf8mb4_general_ci (collations.go:11 defaultCollation, packets.go:324で適用) が使われる。
+	//    LIKEの両オペランドはプレースホルダ由来のリテラルなのでこの接続照合順序で比較され、utf8mb4_general_ciは大文字小文字を区別しない(_ci)。
+	//    strings.ToLowerで揃えてから比較することで同じ挙動にする(commentは一度だけ変換すればよい)。
+	// 2. LIKEワイルドカード(%, _, \)は初期データ(webapp/sql/initial_ngwords.sql、13,690語)には一つも含まれておらず、
+	//    CONCAT('%', word, '%')は実質単なる部分文字列判定なのでstrings.Containsで等価。
+	//    (ベンチ実行中に%や_を含むNGワードが登録された場合はLIKEの方が広くマッチする可能性があるが、無視できるリスクと判断)
 	var ngwords []*NGWord
 	if err := tx.SelectContext(ctx, &ngwords, "SELECT id, user_id, livestream_id, word FROM ng_words WHERE user_id = ? AND livestream_id = ?", livestreamModel.UserID, livestreamModel.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get NG words: "+err.Error())
 	}
 
-	var hitSpam int
+	lowerComment := strings.ToLower(req.Comment)
 	for _, ngword := range ngwords {
-		query := `
-		SELECT COUNT(*)
-		FROM
-		(SELECT ? AS text) AS texts
-		INNER JOIN
-		(SELECT CONCAT('%', ?, '%')	AS pattern) AS patterns
-		ON texts.text LIKE patterns.pattern;
-		`
-		if err := tx.GetContext(ctx, &hitSpam, query, req.Comment, ngword.Word); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get hitspam: "+err.Error())
-		}
-		if hitSpam >= 1 {
+		if strings.Contains(lowerComment, strings.ToLower(ngword.Word)) {
 			return echo.NewHTTPError(http.StatusBadRequest, "このコメントがスパム判定されました")
 		}
 	}
