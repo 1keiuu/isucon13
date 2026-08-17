@@ -4,6 +4,7 @@ package main
 // sqlx的な参考: https://jmoiron.github.io/sqlx/
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"net"
@@ -140,6 +141,18 @@ func connectDB(logger echo.Logger) (*sqlx.DB, error) {
 	return db, nil
 }
 
+// loadFallbackImageHash は fallbackImage (NoImage.jpg) の SHA256(hex) を
+// 一度だけ計算して fallbackImageHash に保持する。失敗した場合は起動を止める
+// (アイコン未登録ユーザー全員の icon_hash が不整合になるため、握り潰さない)。
+func loadFallbackImageHash() error {
+	b, err := os.ReadFile(fallbackImage)
+	if err != nil {
+		return fmt.Errorf("failed to read fallback image %q: %w", fallbackImage, err)
+	}
+	fallbackImageHash = fmt.Sprintf("%x", sha256.Sum256(b))
+	return nil
+}
+
 func initializeHandler(c echo.Context) error {
 	if out, err := exec.Command("../sql/init.sh").CombinedOutput(); err != nil {
 		c.Logger().Warnf("init.sh failed with err=%s", string(out))
@@ -156,6 +169,11 @@ func initializeHandler(c echo.Context) error {
 
 func main() {
 	startProfiler()
+
+	// アイコン未登録ユーザーのフォールバック画像ハッシュは起動時に1回だけ計算する(#11)。
+	if err := loadFallbackImageHash(); err != nil {
+		log.Fatalf("failed to load fallback image hash: %v", err)
+	}
 
 	e := echo.New()
 	// リクエストごとのログ出力は 1 リクエストあたり数百μs〜の write を発生させるため止める。

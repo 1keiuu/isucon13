@@ -48,6 +48,16 @@ mysql/add-index:
 		"$${ISUCON13_MYSQL_DIALCONFIG_DATABASE:-isupipe}" \
 		< webapp/sql/add_index.sql
 
+## [MySQL] Add icons.icon_hash column to the existing DB (run on app host; connects to the DB host). Do not run during a benchmark run.
+mysql/alter-icon-hash:
+	mysql \
+		-u"$${ISUCON13_MYSQL_DIALCONFIG_USER:-isucon}" \
+		-p"$${ISUCON13_MYSQL_DIALCONFIG_PASSWORD:-isucon}" \
+		--host "$${ISUCON13_MYSQL_DIALCONFIG_ADDRESS:-192.168.139.51}" \
+		--port "$${ISUCON13_MYSQL_DIALCONFIG_PORT:-3306}" \
+		"$${ISUCON13_MYSQL_DIALCONFIG_DATABASE:-isupipe}" \
+		< webapp/sql/alter_icon_hash.sql
+
 ## [Nginx] Restart server
 nginx/restart:
 	nginx -t
