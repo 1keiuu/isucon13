@@ -48,23 +48,21 @@ myisam-recover-options  = BACKUP
 # table_open_cache       = 4000
 
 #
-# * ISUCON tuning
+# * ISUCON Tuning
 #
-# InnoDB
 # サーバは 4GB。DB は isucondb ホストに分離済みなので半分をバッファプールに回す。
 # SHOW ENGINE INNODB STATUS の Buffer pool hit rate を見て調整する。
-innodb_buffer_pool_size        = 2G
-# コミットごとの fsync をやめる。正常な再起動（追試）ではデータは失われない。
-innodb_flush_log_at_trx_commit = 2
+innodb_buffer_pool_size         = 2G
+# コミットごとの fsync をやめる。OS クラッシュ時は直近1秒を失うが、
+# 正常な systemctl restart / reboot ではデータは失われない（追試には抵触しない）。
+innodb_flush_log_at_trx_commit  = 2
 # OS のページキャッシュとの二重バッファリングを避ける
-innodb_flush_method            = O_DIRECT
-
-# レプリケーションしないので binlog を無効化する（binlog の fsync が消える）
-skip-log-bin
-
-# 接続数。アプリ側のプール（#18）を増やす前提で上げておく
-max_connections                = 512
-table_open_cache               = 4000
+innodb_flush_method             = O_DIRECT
+# アプリ側のコネクションプール拡大（#18）の前提として上げておく
+max_connections                 = 512
+# レプリケーションしないので binlog を無効化する（binlog の fsync とディスク書き込みが消える）。
+# このオプションが効かない MySQL バージョンでは skip-log-bin に置き換える。
+disable_log_bin
 
 #
 # * Logging and Replication
