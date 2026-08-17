@@ -151,17 +151,24 @@ func getIconHandler(c echo.Context) error {
 	if hasIcon {
 		iconHash = row.IconHash.String
 	}
+	// 200 と 304 の両方で使うので、ここで一度だけクォートして揃える
+	// (ブランチごとに別々に組み立てて値がズレる事故を防ぐ)。
+	etag := `"` + iconHash + `"`
 
 	// 条件付きGETのときだけ304を返す。If-None-Matchが無いリクエストに304を
 	// 返すとマニュアルのMUST NOT違反になるため、ヘッダが空の場合は
 	// ifNoneMatchMatchesが必ずfalseを返す実装にしている。
+	// RFC 9110 §15.4.5 により、304 でも 200 と同じ ETag を返す
+	// (クライアントがキャッシュしたバリデータを失って以後 unconditional GET
+	// に戻ってしまうと、この Issue が狙う効果が消えるため)。
 	if ifNoneMatchMatches(c.Request().Header.Get("If-None-Match"), iconHash) {
+		c.Response().Header().Set("ETag", etag)
 		return c.NoContent(http.StatusNotModified)
 	}
 
 	// 304 でない場合だけ画像本体を読む。
 	if !hasIcon {
-		c.Response().Header().Set("ETag", `"`+iconHash+`"`)
+		c.Response().Header().Set("ETag", etag)
 		return c.File(fallbackImage)
 	}
 
@@ -169,13 +176,15 @@ func getIconHandler(c echo.Context) error {
 	if err := dbConn.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", row.UserID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// 直前の判定後にアイコンが削除された場合のレース対応。
+			// 実際に返す本体がフォールバック画像なので、ETagもそれに合わせる
+			// (iconHash/etag ではなく fallbackImageHash を使う)。
 			c.Response().Header().Set("ETag", `"`+fallbackImageHash+`"`)
 			return c.File(fallbackImage)
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
 	}
 
-	c.Response().Header().Set("ETag", `"`+iconHash+`"`)
+	c.Response().Header().Set("ETag", etag)
 	return c.Blob(http.StatusOK, "image/jpeg", image)
 }
 
